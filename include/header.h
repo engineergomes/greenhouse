@@ -25,3 +25,26 @@
 
 WiFiClientSecure secured_client;
 UniversalTelegramBot bot(BOT_TOKEN, secured_client);
+
+const unsigned long BOT_MTBS = 1000; // mean time between scan messages
+unsigned long bot_lasttime; // last time messages' scan has been done
+
+
+int ledStatus1 = 1;
+int ledStatus2 = 1;
+int ledStatus3 = 1;
+
+int state;
+
+int stateLock = 0;
+
+int start_time1, start_time2;
+unsigned long timer_lasttime;
+unsigned long timerCountMs;
+int noTimerSet = 0;
+
+
+
+void ledTimer(int startHour, int startMinute, String chatId);
+void handleNewMessages(int numNewMessages);
+void checkLedStatus(String chatId);
