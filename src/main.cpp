@@ -38,11 +38,14 @@ int state;
 
 int stateLock = 0;
 
-int start_time1, start_time2, end_time1, end_time2;
+int start_time1, start_time2;
+unsigned long timer_lasttime;
+unsigned long timerCountMs;
+int noTimerSet = 0;
 
 
 
-void ledTimer(int startHour, int startMinute, int endHour, int endMinute, String chatId);
+void ledTimer(int startHour, int startMinute, String chatId);
 void handleNewMessages(int numNewMessages);
 void checkLedStatus(String chatId);
 
@@ -92,6 +95,8 @@ void setup()
     now = time(nullptr);
   }
   Serial.println(now);
+
+  bot.sendMessage("1729540434", "Power just turned on, please reconfig timer with /settimer, if your start hour has already passed remember to turn light on and manualy in the first day", "");
 }
 
 void loop()
@@ -107,31 +112,41 @@ void loop()
       handleNewMessages(numNewMessages);
       numNewMessages = bot.getUpdates(bot.last_message_received + 1);
     }
-    ledTimer(start_time1, start_time2, end_time1, end_time2, "1729540434");
+    // while /settimer not called on telegram, loop wont call ledTimer()
+    if (noTimerSet == 1 ){
+      ledTimer(start_time1, start_time2, "1729540434");
+    }
+    
     
     bot_lasttime = millis();
   }
 }
 
-void ledTimer(int startHour, int startMinute, int endHour, int endMinute, String chatId) {
+void ledTimer(int startHour, int startMinute , String chatId) {
+  
     time_t currentTime;
     struct tm *timeInfo;
 
 
     time(&currentTime);
     timeInfo = localtime(&currentTime);
+
     char hour[10];
     char minutes[10];
     strftime(hour, sizeof(hour), "%H", timeInfo);
     strftime(minutes, sizeof(minutes), "%M", timeInfo);
-    bot.sendMessage(chatId,hour);
+ 
 
-
+    if((atoi(hour) <= startHour) && (startHour != 0)){
+      stateLock = 0;
+    }else if(( atoi(hour) >= 23) && (startHour == 0) ){
+      stateLock = 0;
+    }
     
-// bot.sendMessage(chatId,hour , "");/
+//  bot.sendMessage(chatId,hour , "");
 //  bot.sendMessage(chatId, minutes, "");/
     
-    if((atoi(hour) >= startHour) && (atoi(minutes) >= startMinute) && (stateLock == 0)) {
+    if((stateLock == 0) && (atoi(hour) >= startHour) && (atoi(minutes) >= startMinute)) {
       // turn on LEDs
       digitalWrite(COOL_5, LOW);
       digitalWrite(COOL_18, LOW);
@@ -144,7 +159,10 @@ void ledTimer(int startHour, int startMinute, int endHour, int endMinute, String
       ledStatus3 = 0;
       stateLock = 1;
       bot.sendMessage(chatId, "all Leds ON", "");
-    } else if ((stateLock == 1) && (atoi(hour) >= endHour) && (atoi(minutes) >= endMinute)) {
+      timer_lasttime = millis();
+    }
+    
+    if ((stateLock == 1) && (millis() - timer_lasttime  >= timerCountMs)) {
       // turn off LEDs
       digitalWrite(COOL_5, HIGH);
       digitalWrite(COOL_18, HIGH);
@@ -155,9 +173,10 @@ void ledTimer(int startHour, int startMinute, int endHour, int endMinute, String
       ledStatus1 = 1;
       ledStatus2 = 1;
       ledStatus3 = 1;
-      stateLock = 0;
+      stateLock = 2;
       bot.sendMessage(chatId, "all Leds off", "");
     }
+
 }
 
 
@@ -275,7 +294,7 @@ void handleNewMessages(int numNewMessages)
  
 
    if (text == "/settimer") {
-    bot.sendMessage(chat_id, "Please send the start hour (0-23) +2", "");
+    bot.sendMessage(chat_id, "Please send the start hour (0-23) ps: gmt-3 needs to add 3hrs", "");
      state = 1;
     } else if (state == 1) {
       int startHour = atoi(text.c_str());
@@ -284,18 +303,20 @@ void handleNewMessages(int numNewMessages)
       start_time1 = startHour;
     } else if (state == 2) {
       int startMinute = atoi(text.c_str());
-      bot.sendMessage(chat_id, "Please send the end hour (0-23) +2", "");
+      bot.sendMessage(chat_id, "Please send how many hours will lights be on", "");
       state = 3;
       start_time2 = startMinute;
     } else if (state == 3) {
       int endHour = atoi(text.c_str());
-      bot.sendMessage(chat_id, "Please send the end minute (0-59)", "");
-      state = 4;
-      end_time1 = endHour;
+      bot.sendMessage(chat_id, "Please send how many minutes will lights be on", "");
+      timerCountMs = endHour*60*60*1000;
+       state = 4;
     } else if (state == 4) {
       int endMinute = atoi(text.c_str());
-      end_time2 = endMinute;
+      timerCountMs = endMinute*60*1000 + timerCountMs;
       bot.sendMessage(chat_id, "Led timer setup complete", "");
+      noTimerSet = 1; //enable ledTimer to work
+      timer_lasttime = millis();
       state = 0;
 }
     
